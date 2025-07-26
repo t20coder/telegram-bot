@@ -1,19 +1,38 @@
+import os
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler,
+    CallbackQueryHandler, ContextTypes
+)
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv() # ⬅️ Load .env variables (used by Render)
 
 # 🛡️ Admin ID
-ADMIN_ID = 6352552205 # Replace with your actual Telegram ID
+ADMIN_ID = 6352552205 # Replace with your own ID
 
-# 🧑‍💼 Broadcast recipients (group/user IDs)
+# 📥 Bot Token (loaded securely)
+bot_token = os.getenv("BOT_TOKEN")
+
+# 🧑‍💼 Recipients
 broadcast_chat_ids = [
-    6352552205, # your user ID
-    -1002861471371 # your group/channel ID
+    6352552205, # Your personal Telegram ID
+    -1002861471371 # Your group/channel ID
 ]
 
-# 💱 Currency pairs
+group_chat_ids = [
+    -1002861471371 # For group-specific broadcast
+]
+
+# 💱 Currency Pairs
 currency_pairs = [
-"EUR/GBP","EUR/USD","USD/ARS","USD/BDT ","USD/PKR ","EUR/CAD","USD/IDR", "EUR/CHF","EUR/NZD","USD/COP","USD/PHP","AUD/USD","NZD/CAD","USD/CAD","USD/CHF","USD/NGN","USD/TRY","EUR/JPY","USD/ZAR","CAD/CHF","CHF/JPY","USD/JPY","AUD/CAD","AUD/CHF","AUD/JPY","GBP/AUD","GBP/USD","NZD/CHF","NZD/JPY","GBP/CAD","USD/DZD","EUR/AUD","USD/EGP","USD/MXN","CAD/JPY","NZD/USD","GBP/NZD"
+    "EUR/GBP", "EUR/USD", "USD/ARS", "USD/BDT", "USD/PKR", "EUR/CAD", "USD/IDR",
+    "EUR/CHF", "EUR/NZD", "USD/COP", "USD/PHP", "AUD/USD", "NZD/CAD", "USD/CAD",
+    "USD/CHF", "USD/NGN", "USD/TRY", "EUR/JPY", "USD/ZAR", "CAD/CHF", "CHF/JPY",
+    "USD/JPY", "AUD/CAD", "AUD/CHF", "AUD/JPY", "GBP/AUD", "GBP/USD", "NZD/CHF",
+    "NZD/JPY", "GBP/CAD", "USD/DZD", "EUR/AUD", "USD/EGP", "USD/MXN", "CAD/JPY",
+    "NZD/USD", "GBP/NZD"
 ]
 
 # 🔐 Admin-only decorator
@@ -25,7 +44,7 @@ def admin_only(func):
         await func(update, context)
     return wrapper
 
-# ⬇️ Signal buttons
+# ⬇️ Signal Buttons
 def create_signal_buttons(pairs):
     keyboard = []
     for pair in pairs:
@@ -35,16 +54,16 @@ def create_signal_buttons(pairs):
         ])
     return InlineKeyboardMarkup(keyboard)
 
-# ▶️ /start
+# ▶️ /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reply_markup = create_signal_buttons(currency_pairs)
+    markup = create_signal_buttons(currency_pairs)
     await update.message.reply_text(
         "💵 *All OTC Currency Pairs*\nTap to send signal:\n\nUse /search usd to filter.",
-        reply_markup=reply_markup,
+        reply_markup=markup,
         parse_mode='Markdown'
     )
 
-# 🔍 /search
+# 🔍 /search command
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         keyword = context.args[0].upper()
@@ -61,14 +80,13 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("🔍 Use: /search usd")
 
-# 📲 Handle signal buttons
+# 📲 Handle Signal Buttons
 async def handle_signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     pair, direction = query.data.split("|")
     arrow = "⬆️" if direction == "UP" else "⬇️"
 
-    # ✅ NEW Professional Signal Format
     message = (
         f"📊 *Premium OTC Signal Alert!*\n\n"
         f"📌 *Asset:* `{pair} (OTC)`\n"
@@ -80,14 +98,14 @@ async def handle_signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.message.reply_text(message, parse_mode='Markdown')
 
-# 🔐 /admin panel
+# 🔐 /admin command
 @admin_only
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🔐 Admin Panel\nUse /broadcast <message> to send signal to all users/groups."
+        "🔐 Admin Panel\nUse /broadcast <msg> or /groupbroadcast <msg>"
     )
 
-# 📢 /broadcast command
+# 📢 /broadcast command (to users + groups)
 @admin_only
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args)
@@ -105,8 +123,25 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Broadcast sent to {count} chat(s).")
 
+# 👥 /groupbroadcast command
+@admin_only
+async def group_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = " ".join(context.args)
+    if not msg:
+        await update.message.reply_text("📢 Usage: /groupbroadcast <msg>")
+        return
 
-#Get Chat ID
+    count = 0
+    for group_id in group_chat_ids:
+        try:
+            await context.bot.send_message(chat_id=group_id, text=f"📢 Group Broadcast:\n\n{msg}")
+            count += 1
+        except Exception as e:
+            print(f"❌ Error in group {group_id}: {e}")
+
+    await update.message.reply_text(f"✅ Sent to {count} group(s).")
+
+# 🆔 /getid command
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     await update.message.reply_text(
@@ -114,68 +149,15 @@ async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-#Broadcast ke andar Search filter ko use kar sakte hai.
-group_chat_ids = [
-    -1002861471371 # your group/channel ID
-]
-
-@admin_only
-async def group_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if len(args) < 2:
-        await update.message.reply_text(
-            "📢 Usage:\n/groupbroadcast <currency_pair> <up/down>\n\nExample:\n`/groupbroadcast usd/inr up`",
-            parse_mode='Markdown'
-        )
-        return
-
-    pair = args[0].upper()
-    direction = args[1].upper()
-
-    if direction not in ["UP", "DOWN"]:
-        await update.message.reply_text("❌ Direction must be `up` or `down`.", parse_mode='Markdown')
-        return
-
-    arrow = "⬆️" if direction == "UP" else "⬇️"
-    time_now = datetime.now().strftime('%I:%M %p')
-
-    message = (
-        f"📡 *Premium OTC Signal Alert!*\n\n"
-        f"💱 *Currency:* `{pair}` (OTC)\n"
-        f"⏱ *Timeframe:* 1 Minute\n"
-        f"📈 *Direction:* {arrow} *{direction}*\n"
-        f"⏰ *Signal Time:* `{time_now}`\n\n"
-        f"✅ _Use with confirmation strategy. Enter confidently!_"
-    )
-
-    success = 0
-    fail = 0
-
-    for group_id in group_chat_ids:
-        try:
-            await context.bot.send_message(
-                chat_id=group_id,
-                text=message,
-                parse_mode='Markdown'
-            )
-            success += 1
-        except Exception as e:
-            print(f"❌ Failed to send to {group_id}: {e}")
-            fail += 1
-
-    await update.message.reply_text(
-        f"✅ Signal sent to {success} group(s). ❌ Failed: {fail}"
-    )
-
-# 🤖 Bot launch
-app = ApplicationBuilder().token("7754713805:AAGseXAs1okbRsQKpDKWZtVn3K4oVW9QvhY").build()
+# 🚀 Initialize Bot
+app = ApplicationBuilder().token(bot_token).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("search", search))
-app.add_handler(CallbackQueryHandler(handle_signal))
 app.add_handler(CommandHandler("admin", admin_panel))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CommandHandler("groupbroadcast", group_broadcast))
 app.add_handler(CommandHandler("getid", get_chat_id))
+app.add_handler(CallbackQueryHandler(handle_signal))
 
 print("🚀 NMJ Trader Bot is Live")
 app.run_polling()
