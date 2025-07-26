@@ -1,31 +1,19 @@
-import os
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler,
-    CallbackQueryHandler, ContextTypes
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 )
 from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv() # ⬅️ Load .env variables (used by Render)
 
 # 🛡️ Admin ID
-ADMIN_ID = 6352552205 # Replace with your own ID
+ADMIN_ID = 6352552205 # Replace with your Telegram ID
 
-# 📥 Bot Token (loaded securely)
-bot_token = os.getenv("BOT_TOKEN")
-
-# 🧑‍💼 Recipients
+# 📢 Broadcast user IDs
 broadcast_chat_ids = [
-    6352552205, # Your personal Telegram ID
-    -1002861471371 # Your group/channel ID
+    6352552205, # Personal ID
+    -1002861471371 # Group ID
 ]
 
-group_chat_ids = [
-    -1002861471371 # For group-specific broadcast
-]
-
-# 💱 Currency Pairs
+# 💱 Currency pairs (OTC)
 currency_pairs = [
     "EUR/GBP", "EUR/USD", "USD/ARS", "USD/BDT", "USD/PKR", "EUR/CAD", "USD/IDR",
     "EUR/CHF", "EUR/NZD", "USD/COP", "USD/PHP", "AUD/USD", "NZD/CAD", "USD/CAD",
@@ -44,7 +32,7 @@ def admin_only(func):
         await func(update, context)
     return wrapper
 
-# ⬇️ Signal Buttons
+# ⬇️ Signal buttons
 def create_signal_buttons(pairs):
     keyboard = []
     for pair in pairs:
@@ -54,16 +42,16 @@ def create_signal_buttons(pairs):
         ])
     return InlineKeyboardMarkup(keyboard)
 
-# ▶️ /start command
+# ▶️ /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    markup = create_signal_buttons(currency_pairs)
+    reply_markup = create_signal_buttons(currency_pairs)
     await update.message.reply_text(
         "💵 *All OTC Currency Pairs*\nTap to send signal:\n\nUse /search usd to filter.",
-        reply_markup=markup,
+        reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-# 🔍 /search command
+# 🔍 /search
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         keyword = context.args[0].upper()
@@ -80,7 +68,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("🔍 Use: /search usd")
 
-# 📲 Handle Signal Buttons
+# 📲 Button Callback Handler
 async def handle_signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -98,19 +86,21 @@ async def handle_signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.message.reply_text(message, parse_mode='Markdown')
 
-# 🔐 /admin command
+# 🔐 /admin
 @admin_only
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🔐 Admin Panel\nUse /broadcast <msg> or /groupbroadcast <msg>"
+        "🔐 Admin Panel:\n"
+        "/broadcast <msg> – Send to all users\n"
+        "/groupbroadcast <msg> – Send to group only"
     )
 
-# 📢 /broadcast command (to users + groups)
+# 📢 /broadcast to all (user + group)
 @admin_only
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args)
     if not msg:
-        await update.message.reply_text("📢 Usage: /broadcast Your message here")
+        await update.message.reply_text("❗ Usage: /broadcast <your message>")
         return
 
     count = 0
@@ -119,45 +109,44 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=chat_id, text=f"📢 Broadcast:\n\n{msg}")
             count += 1
         except Exception as e:
-            print(f"❌ Error sending to {chat_id}: {e}")
+            print(f"Error sending to {chat_id}: {e}")
+    await update.message.reply_text(f"✅ Sent to {count} chats.")
 
-    await update.message.reply_text(f"✅ Broadcast sent to {count} chat(s).")
-
-# 👥 /groupbroadcast command
+# 📢 /groupbroadcast only
 @admin_only
 async def group_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = " ".join(context.args)
     if not msg:
-        await update.message.reply_text("📢 Usage: /groupbroadcast <msg>")
+        await update.message.reply_text("❗ Usage: /groupbroadcast <your message>")
         return
 
+    group_ids = [-1002861471371] # Only group
     count = 0
-    for group_id in group_chat_ids:
+    for chat_id in group_ids:
         try:
-            await context.bot.send_message(chat_id=group_id, text=f"📢 Group Broadcast:\n\n{msg}")
+            await context.bot.send_message(chat_id=chat_id, text=f"📢 Group Signal:\n\n{msg}")
             count += 1
         except Exception as e:
-            print(f"❌ Error in group {group_id}: {e}")
+            print(f"Group error: {e}")
+    await update.message.reply_text(f"✅ Group broadcast sent to {count} group(s).")
 
-    await update.message.reply_text(f"✅ Sent to {count} group(s).")
-
-# 🆔 /getid command
+# 🆔 /getid
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    await update.message.reply_text(
-        f"📢 This chat ID is:\n`{chat.id}`",
-        parse_mode='Markdown'
-    )
+    await update.message.reply_text(f"🆔 Chat ID: `{chat.id}`", parse_mode='Markdown')
 
-# 🚀 Initialize Bot
+# 🚀 Bot Launch
+bot_token = "7754713805:AAGseXAs1okbRsQKpDKWZtVn3K4oVW9QvhY" # Replace this before running
 app = ApplicationBuilder().token(bot_token).build()
+
+# 🧩 Handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("search", search))
+app.add_handler(CallbackQueryHandler(handle_signal))
 app.add_handler(CommandHandler("admin", admin_panel))
 app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CommandHandler("groupbroadcast", group_broadcast))
 app.add_handler(CommandHandler("getid", get_chat_id))
-app.add_handler(CallbackQueryHandler(handle_signal))
 
 print("🚀 NMJ Trader Bot is Live")
 app.run_polling()
