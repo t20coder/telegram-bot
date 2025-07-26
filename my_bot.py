@@ -2,6 +2,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+load_dotenv()  #Load from .env file
 
 # 👇 Use environment variable (from .env or Render secrets)
 bot_token = os.getenv("BOT_TOKEN")
