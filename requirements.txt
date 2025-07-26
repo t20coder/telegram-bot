@@ -1,5 +1,2 @@
-python-telegram-bot==20.6
-aiohttp
-pytz
-python-dateutil
+python-telegram-bot==20.8
 python-dotenv
